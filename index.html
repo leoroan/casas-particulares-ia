@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Casas Particulares IA - Liquidación de Personal</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      integrity="sha384-rbsA2bKQYmnH5x4z3aV3c4l1f5P+YlRqz5m2eOeB5wF5vM5k2eJ3k5H5j5k5k5k5k5k5"
+      crossorigin="anonymous"
+    />
+    <style>
+      :root {
+        --cp-primary: #6c5ce7;
+        --cp-primary-dark: #5649c6;
+        --cp-secondary: #0984e3;
+        --cp-success: #00b894;
+        --cp-warning: #fdcb6e;
+        --cp-danger: #e17055;
+        --cp-demo: #00cec9;
+        --cp-bg: #f1f2f6;
+        --cp-surface: #ffffff;
+        --cp-text: #2d3436;
+        --cp-text-muted: #636e72;
+        --cp-border: #dfe6e9;
+        --cp-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      }
+      body {
+        background: var(--cp-bg);
+        color: var(--cp-text);
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      }
+      .navbar { background: var(--cp-surface); border-bottom: 1px solid var(--cp-border); box-shadow: var(--cp-shadow); }
+      .navbar-brand { font-weight: 800; color: var(--cp-primary) !important; font-size: 1.25rem; letter-spacing: -0.5px; }
+      .btn-cp { background: var(--cp-primary); border: none; color: #fff; }
+      .btn-cp:hover { background: var(--cp-primary-dark); color: #fff; }
+      .btn-outline-cp { color: var(--cp-primary); border-color: var(--cp-primary); background: transparent; }
+      .btn-outline-cp:hover { background: var(--cp-primary); color: #fff; }
+      .card { border: 1px solid var(--cp-border); border-radius: 12px; background: var(--cp-surface); box-shadow: var(--cp-shadow); }
+      .card-header { background: #fff; border-bottom: 1px solid var(--cp-border); font-weight: 700; }
+      .text-demo { color: var(--cp-demo); font-weight: 700; }
+      .badge-demo { background: var(--cp-demo); color: #fff; }
+      .money { font-variant-numeric: tabular-nums; font-weight: 700; }
+      .muted { color: var(--cp-text-muted); }
+      .stepper .step { position: relative; }
+      .form-control, .form-select { border-color: var(--cp-border); }
+      .form-control:focus { border-color: var(--cp-primary); box-shadow: 0 0 0 0.2rem rgba(108,92,231,0.25); }
+      table { font-size: 0.9rem; }
+      .print-only { display: none !important; }
+      @media print {
+        body * { visibility: hidden !important; }
+        .print-area, .print-area * { visibility: visible !important; }
+        .print-area { position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
+        .no-print { display: none !important; }
+        body { background: #fff !important; }
+      }
+      .calendar { max-width: 340px; margin: 0 auto; }
+      .weekdays { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 0.75rem; font-weight: 700; text-align: center; color: var(--cp-text-muted); margin-bottom: 4px; }
+      .days { display: grid; grid-template-columns: repeat(7, 1fr); }
+      .day { aspect-ratio: 1; width: 100%; border: 1px solid var(--cp-border); text-align: center; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; }
+      .day.empty { border: none; background: transparent; }
+      .day.holiday { color: var(--cp-danger); font-weight: 700; background: #fdecea; }
+      .day.today { background: var(--cp-primary); color: #fff; border-radius: 50%; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
