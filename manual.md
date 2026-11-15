@@ -15,7 +15,8 @@ Aplicación de gestión para empleadas de casas particulares (régimen Ley 26.84
    - Causa 2: En `src/features/leaves/hooks.js` línea 19, `setError(err(l) ? l.error : null)` setea el **objeto completo de error de Postgres** (con keys `message`, `details`, `hint`, `code`) en lugar del mensaje string. Al renderizar `{error}` en la página, React intenta renderizar un objeto y lanza "Objects are not valid as a React child", lo cual propaga un error no capturado al nivel del Router, que muestra su errorElement por defecto: "Unexpected Application Error!".
    - Solución: `setError(l.error ? l.error.message : null)`.
 
-3. **HousesPage es un stub** — ❌ **PENDIENTE**. Muestra "x"/"hi" en lugar de la UI real de casas. Parece un placeholder no completado por la IA generadora. El componente se llama `MinHouse` (no `HousesPage`) y está en `src/features/houses/pages/HousesPage.jsx`.
+3. **HousesPage es un stub** — ✅ **FIXADO (2026-11-14)**. Mostraba "x"/"hi" en lugar de la UI real de casas. El componente se llamaba `MinHouse`.
+   - Solución: `src/features/houses/pages/HousesPage.jsx` ahora exporta `HousesPage`, consume `useHouses()` y renderiza `HouseForm` + `HouseList` con alta, edición, borrado y deshacer, siguiendo el mismo patrón que `EmployeesPage`/`ScalesPage`.
 
 4. **SettingsPage bug** — ✅ **FIXADO**. Usaba `setProfile` y `setSettings` que no estaban disponibles en el scope de la página. Esto provocaría `ReferenceError` al intentar escribir en los formularios.
    - Solución: El hook `useSettings()` (en `src/features/settings/hooks.js`) ahora expone `setSettings` y `setProfile` como setters de estado, y la página los destructura correctamente en línea 6-8.
@@ -25,6 +26,28 @@ Aplicación de gestión para empleadas de casas particulares (régimen Ley 26.84
    - Soluciones aplicadas:
      - `EmployeesPage.jsx`: el drawer ahora se renderiza solo cuando `emp` es truthy: `{emp && <EmployeeDrawer ... />}`.
      - `EmployeeDrawer.jsx`: defensa adicional respetando el orden de hooks: `useEmployeeContext(employee?.id)` y early-return `if (!open || !employee) return null;`.
+
+6. **Warning en consola: "Encountered two children with the same key, `M`" en /liquidar** — ✅ **FIXADO (2026-11-14)**. Aparecía en `Step1MonthPicker` al renderizar la fila de días de la semana.
+   - Causa: El array `['L','M','M','J','V','S','D']` contenía dos `'M'` (Martes y Miércoles) y se usaba `key={d}`, generando keys duplicadas.
+   - Solución aplicada en `src/features/settlements/components/Step1MonthPicker.jsx`:
+     - Array corregido a `['L','M','X','J','V','S','D']` con `key={i}`.
+     - `viewMonth` se inicializa con `.slice(0, 7)` para aceptar el formato `YYYY-MM` del `<input type="month">` (antes recibía `YYYY-MM-01` y el input quedaba vacío).
+     - El badge de días esperados ahora usa `expectedDays(period, [1,2,3,4,5], holidays)` (Lunes a Viernes) en lugar de patrón vacío `[]` que siempre daba 0; label actualizado a "Días laborables del mes (L-V, sin feriados)".
+     - `dateES(period + '-01')` → `dateES(period)` (antes generaba fecha inválida `YYYY-MM-01-01`).
+     - Botón "Siguiente" ahora tiene `onClick={() => period && onPeriodChange(period)}` (antes era decorativo y no avanzaba si volvías del paso 2).
+   - Correcciones adicionales de lógica en el wizard:
+     - `Step2EmployeeCards.jsx`: se extrajo el componente interno `EmployeeCard` porque el hook `useCalcSettlement` se llamaba dentro de un `.map()` (violación de las reglas de hooks de React). Ahora `Step2EmployeeCards` solo mapea y renderiza `<EmployeeCard key={emp.id} .../>` con los props necesarios; `monthHolidays` se calcula en el padre y se pasa como `holidays`.
+     - El input "Valor hora" pasó a ser `readOnly` con tooltip explicativo, ya que `calculateSettlement` (domain/payroll.js) nunca usaba `inputs.valorHora`, por lo que editarlo no tenía efecto y confundía al usuario.
+     - Se eliminó el import de `useState` que quedó sin usar.
+
+7. **400 Bad Request al cargar empleada / casa / ajustes (`POST /rest/v1/employees?select=*` → `PGRST204`)** — ✅ **FIXADO (2026-11-15)**. Al guardar una empleada, el form enviaba `categoria`, `con_retiro`, `horas_dia`, `dias_semana`, `valor_hora_override` y `valor_mensual_override`, que **no eran columnas** de la tabla `employees` (solo existían en `assignments`). PostgREST respondía 400 `Could not find the 'categoria' column of 'employees' in the schema cache`. Lo mismo pasaba con `settings` si el payload viajaba plano en vez de dentro de `datos` (build viejo).
+   - **No** es causa de esto tener las tablas "unrestricted" con RLS disabled: ese estado solo define quién puede leer/escribir; el 400 es un error de payload (claves que no son columnas). Queda como riesgo de seguridad ver nota final de Arquitectura General.
+   - Solución aplicada:
+     - `supabase/schema.sql` + `supabase/migrations/20261115_employee_campos_form.sql`: se agregan las 6 columnas faltantes a `employees`. **Ejecutar la migración en Supabase (SQL Editor) antes de probar.**
+     - `src/lib/storageAdapter.js`: `saveEmployee` ahora filtra el payload con la whitelist `EMPLOYEE_COLUMNS` y normaliza `fecha_ingreso: '' → null` (fecha vacía también daba 400: `invalid input syntax for type date`).
+     - `src/features/employees/components/EmployeeForm.jsx`: `fecha_ingreso: form.fecha_ingreso || null`.
+   - Verificación: con curl se reprodujo el 400 original y se confirmó que `houses` (payload limpio) y `settings` (payload dentro de `datos`) crean con 201.
+   - Si el error persiste en el sitio desplegado (gh-pages), es un **build viejo**: regenerar con `npm run build` y subir (el workflow de Pages usa los Secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 
 ---
 
@@ -36,6 +59,7 @@ La app usa:
 - **Supabase** como BaaS (autenticación, PostgreSQL, REST API). Si no hay `VITE_SUPABASE_URL/KEY` → modo demo con localStorage.
 - **Patrón de adaptadores**: `src/lib/storageAdapter.js` provee dos adaptadores: `supabaseAdapter()` (cuando hay configuración de Supabase) y `localStorageAdapter()` (modo demo con datos de ejemplo).
 - **Convención**: el aislamiento de datos por usuario se hace filtrando por `user_id` en TODAS las consultas (la BD no tiene RLS activado).
+- **Nota de seguridad (2026-11-15)**: con RLS disabled + tablas "unrestricted", la anon key (pública en el bundle de gh-pages) permite leer y escribir LOS DATOS DE TODOS los usuarios. Para producción conviene habilitar RLS con políticas `USING (user_id = auth.uid())` / `WITH CHECK (user_id = auth.uid())` en cada tabla; el filtrado cliente solo no es suficiente.
 - **Dominio** (`src/domain/`): lógica de negocio pura (cálculo de escalas, antigüedad, vacaciones, cuotas, settlements).
 - **Features** (`src/features/*`): cada módulo de la UI (auth, employees, scales, contributions, holidays, leaves, houses, settlements, dashboard, settings).
 
@@ -81,16 +105,19 @@ La app usa:
 - **Componente** (`DashboardPage.jsx`): tarjetas resumidas + tabla por empleada con última liquidación.
 - **Notable**: ignora errores (no setError) → datos vacíos si falla la consulta.
 
-### 8. Houses (stub)
+### 8. Houses (CRUD casas laborales)
 
-- **Estado actual**: `src/features/houses/pages/HousesPage.jsx` solo muestra "x"/"hi". Sin listado ni formulario real. Pendiente.
+- **Propósito**: administrar las casas donde trabajan las empleadas (alias, dirección, notas).
+- **Hook** (`hooks.js`): `useHouses()` → `{ data, loading, error, save, remove }`.
+- **Componentes**: `HouseForm.jsx` (alta/edición con alias, dirección y notas) y `HouseList.jsx` (tabla con edición inline, borrado con confirmación visual y opción "Deshacer").
+- **Página**: `HousesPage.jsx` muestra el alta en un card al presionar "+ Nueva casa" y el listado debajo.
 
 ### 9. Settlements / Liquidaciones
 
 - **Propósito**: Liquidación mensual por empleada. Genera `settlement` con inputs y líneas por casa.
 - **Wizard** (`liquidar` → `SettlementsWizardPage.jsx`): 3 pasos:
-  1. `Step1MonthPicker` — mes + empleada.
-  2. `Step2EmployeeCards` — datos por empleada.
+  1. `Step1MonthPicker` — mes + calendario con feriados resaltados.
+  2. `Step2EmployeeCards` — datos por empleada; renderiza un componente interno `EmployeeCard` por cada empleada (para respetar las reglas de hooks: `useCalcSettlement` se invoca dentro de `EmployeeCard`, no dentro de un `.map()`).
   3. `Step3Review` — resumen completo.
 - **Dominio** (`domain/payroll.js`): `calculateSettlement(...)` → horas, basico, viaticos, feriado, extras 50/100, antiguedad, zona, ajuste, bruto, aportes, contribuciones, ART, neto y lines.
 
@@ -173,6 +200,10 @@ La app usa:
 
 ### Fix nuevo (2026-11-14): Crash en /empleados
 4. EmployeesPage renderiza el drawer solo si emp existe; EmployeeDrawer usa employee?.id y early return si no hay empleado.
+
+### Fix nuevo (2026-11-14): Wizard /liquidar (Settlements)
+5. Step1MonthPicker: keys duplicadas en días de semana (['L','M','M',...] → ['L','M','X',...] con key={i}); viewMonth con slice(0,7) para input type=month; badge de días laborables L-V con expectedDays real; dateES(period) sin '-01' extra; botón Siguiente con onClick.
+6. Step2EmployeeCards: extracción de EmployeeCard para no llamar useCalcSettlement dentro de .map(); input Valor hora readOnly (no se usaba en calculateSettlement); se quita import useState sin usar.
 
 ### Commits recientes
 - 4724d11 feat: implement demo mode for authentication and enhance error handling in registration and login

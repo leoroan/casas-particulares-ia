@@ -3,12 +3,13 @@ import { expectedDays } from '../../../domain/calendar.js';
 import { dateES } from '../../../lib/format.js';
 
 export default function Step1MonthPicker({ period, onPeriodChange, holidays }) {
-  const [viewMonth, setViewMonth] = useState(period || new Date().toISOString().slice(0, 7));
+  const [viewMonth, setViewMonth] = useState((period || new Date().toISOString().slice(0, 7)).slice(0, 7));
   const [y, m] = viewMonth.split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
   const firstDay = new Date(Date.UTC(y, m - 1, 1));
   const holSet = new Set((holidays || []).map((h) => h.fecha));
-  const exp = period ? expectedDays(period, [], holidays) : 0;
+  // Dias laborables (Lunes a Viernes) del mes, excluyendo feriados
+  const exp = period ? expectedDays(period, [1, 2, 3, 4, 5], holidays) : 0;
 
   function isHoliday(d) {
     const iso = new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10);
@@ -26,16 +27,16 @@ export default function Step1MonthPicker({ period, onPeriodChange, holidays }) {
               type="month" className="form-control"
               value={viewMonth} onChange={(e) => { setViewMonth(e.target.value); onPeriodChange(e.target.value + '-01'); }}
             />
-            <div className="form-text">{period ? dateES(period + '-01') : ''}</div>
+            <div className="form-text">{period ? dateES(period) : ''}</div>
           </div>
           <div className="col-md-4 d-flex align-items-end">
-            <span className="text-muted me-2">Días esperados (sin feriados):</span>
+            <span className="text-muted me-2">Días laborables del mes (L-V, sin feriados):</span>
             <span className="badge bg-info text-dark">{exp}</span>
           </div>
         </div>
         <div className="calendar mb-3">
           <div className="weekdays">
-            {['L','M','M','J','V','S','D'].map((d) => <div key={d} className="wd">{d}</div>)}
+            {['L','M','X','J','V','S','D'].map((d, i) => <div key={i} className="wd">{d}</div>)}
           </div>
           <div className="days">
             {/* dias vacantes antes del 1 */}
@@ -55,7 +56,7 @@ export default function Step1MonthPicker({ period, onPeriodChange, holidays }) {
         </div>
         <div className="d-flex justify-content-between mt-3">
           <span className="text-muted small">Los feriados aparecen resaltados. En el paso 2 podrás indicar cuáles se trabajaron.</span>
-          <button className="btn btn-cp" disabled={!period}>Siguiente: tarjetas de empleadas →</button>
+          <button className="btn btn-cp" disabled={!period} onClick={() => period && onPeriodChange(period)}>Siguiente: tarjetas de empleadas →</button>
         </div>
       </div>
     </div>

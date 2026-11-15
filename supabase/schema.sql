@@ -39,6 +39,12 @@ create table employees (
   fecha_ingreso date,
   activo boolean default true,
   zona_desfavorable boolean default false,
+  categoria text,
+  con_retiro boolean default true,
+  horas_dia numeric default 4,
+  dias_semana jsonb default '[]'::jsonb,
+  valor_hora_override numeric,
+  valor_mensual_override numeric,
   notas text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()

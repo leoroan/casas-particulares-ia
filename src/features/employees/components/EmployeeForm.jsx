@@ -25,6 +25,7 @@ export default function EmployeeForm({ employee, onSave, onCancel }) {
     e.preventDefault();
     const payload = {
       ...form,
+      fecha_ingreso: form.fecha_ingreso || null,
       horas_dia: Number(form.horas_dia || 0),
       valor_hora_override: form.valor_hora_override === '' ? null : Number(form.valor_hora_override),
       valor_mensual_override: form.valor_mensual_override === '' ? null : Number(form.valor_mensual_override),

@@ -344,6 +344,14 @@ function recCreated(rec, existing) {
   return found ? found.created_at : nowISO();
 }
 // ---------- adaptador Supabase ----------
+// Columnas reales de employees (schema.sql). Enviar claves que no son columnas
+// hace que PostgREST responda 400 PGRST204 ("Could not find the 'X' column...").
+const EMPLOYEE_COLUMNS = [
+  'id', 'nombre', 'cuil', 'fecha_ingreso', 'activo', 'zona_desfavorable',
+  'categoria', 'con_retiro', 'horas_dia', 'dias_semana',
+  'valor_hora_override', 'valor_mensual_override', 'notas'
+];
+
 function supabaseAdapter() {
   const uid = async () => {
     const { data: { user} } = await supabase.auth.getUser();
@@ -408,7 +416,13 @@ function supabaseAdapter() {
     async saveEmployee(employee) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('employees').upsert({ ...employee, user_id: id }).select().single();
+      const clean = {};
+      for (const col of EMPLOYEE_COLUMNS) {
+        if (col in employee) clean[col] = employee[col];
+      }
+      if (clean.fecha_ingreso === '') clean.fecha_ingreso = null;
+      clean.user_id = id;
+      const { data, error } = await supabase.from('employees').upsert(clean).select().single();
       return { data, error };
     },
     async deleteEmployee(id) {
