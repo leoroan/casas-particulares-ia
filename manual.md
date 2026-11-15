@@ -6,16 +6,25 @@ Aplicación de gestión para empleadas de casas particulares (régimen Ley 26.84
 
 ### Estado actual de los errores reportados
 
-1. **"invalid input syntax for type uuid: \"null\""** — Aparece en las páginas de Empleadas, Escalas, Cuotas y Feriados.
+1. **"invalid input syntax for type uuid: \"null\""** — ✅ **FIXADO**. Aparecía en las páginas de Empleadas, Escalas, Cuotas y Feriados.
    - Causa: El adaptador Supabase en `src/lib/storageAdapter.js` tenía una función `uid()` que leía de `localStorage.getItem(\`sb-${DEMO_ID}-auth-token\`)` usando un UUID demo fijo que nunca coincide con la clave real de Supabase (`sb-<project-ref>-auth-token`). Resultado: `uid()` devolvía `null`, y cada consulta `.eq('user_id', null)` enviaba a PostgREST `user_id=eq.null`, que Postgres interpretaba como `WHERE user_id = 'null'::uuid` → error 22P02.
+   - Solución: `uid()` ahora usa `supabase.auth.getUser()` (async) y todas las llamadas usan `await uid()`.
 
-2. **"Unexpected Application Error!"** — Aparece en la página de Licencias.
-   - Causa 1: Mismo problema de `uid()` nulo que el anterior.
+2. **"Unexpected Application Error!"** — ✅ **FIXADO**. Aparecía en la página de Licencias.
+   - Causa 1: Mismo problema de `uid()` nulo que el anterior (arreglado junto con el fix 1).
    - Causa 2: En `src/features/leaves/hooks.js` línea 19, `setError(err(l) ? l.error : null)` setea el **objeto completo de error de Postgres** (con keys `message`, `details`, `hint`, `code`) en lugar del mensaje string. Al renderizar `{error}` en la página, React intenta renderizar un objeto y lanza "Objects are not valid as a React child", lo cual propaga un error no capturado al nivel del Router, que muestra su errorElement por defecto: "Unexpected Application Error!".
+   - Solución: `setError(l.error ? l.error.message : null)`.
 
-3. **HousesPage es un stub**: Muestra "x"/"hi" en lugar de la UI real de casas. Parece un placeholder no completado por la IA generadora.
+3. **HousesPage es un stub** — ❌ **PENDIENTE**. Muestra "x"/"hi" en lugar de la UI real de casas. Parece un placeholder no completado por la IA generadora. El componente se llama `MinHouse` (no `HousesPage`) y está en `src/features/houses/pages/HousesPage.jsx`.
 
-4. **SettingsPage bug**: Usa `setProfile` y `setSettings` que no están disponibles en el scope de la página (solo dentro del hook `useSettings`). Esto provocaría `ReferenceError` al intentar escribir en los formularios.
+4. **SettingsPage bug** — ✅ **FIXADO**. Usaba `setProfile` y `setSettings` que no estaban disponibles en el scope de la página. Esto provocaría `ReferenceError` al intentar escribir en los formularios.
+   - Solución: El hook `useSettings()` (en `src/features/settings/hooks.js`) ahora expone `setSettings` y `setProfile` como setters de estado, y la página los destructura correctamente en línea 6-8.
+
+5. **EmployeeDrawer crash por `employee` undefined** — ✅ **FIXADO (2026-11-14)**. Al abrir `/empleados` sin haber seleccionado una empleada, el drawer se renderizaba de forma incondicional con `employee={undefined}`, y dentro del componente se hacía `useEmployeeContext(employee.id)` → `Cannot read properties of undefined (reading 'id')`.
+   - Causa raíz: En `EmployeesPage.jsx` el drawer siempre se montaba, incluso cuando `viewId`/`viewEmp` eran `null`.
+   - Soluciones aplicadas:
+     - `EmployeesPage.jsx`: el drawer ahora se renderiza solo cuando `emp` es truthy: `{emp && <EmployeeDrawer ... />}`.
+     - `EmployeeDrawer.jsx`: defensa adicional respetando el orden de hooks: `useEmployeeContext(employee?.id)` y early-return `if (!open || !employee) return null;`.
 
 ---
 
@@ -23,51 +32,12 @@ Aplicación de gestión para empleadas de casas particulares (régimen Ley 26.84
 
 La app usa:
 
-
-
----
-
-## Diagnóstico y Fixes Aplicados
-
-### Fix 1: Adaptador Supabase — función uid() (`storageAdapter.js`)
-
-**Problema**: `uid()` leía `localStorage.getItem(\`sb-${DEMO_ID}-auth-token\`)` usando un UUID demo fijo `'00000000-0000-0000-0000-000000000001'`. Supabase guarda la sesión bajo `sb-<project-ref>-auth-token` (ref extraído de VITE_SUPABASE_URL). La clave nunca coincidía → `uid()` devolvía `null` → cada `.eq('user_id', null)` enviaba a PostgREST `user_id=eq.null` → Postgres recibió `WHERE user_id = 'null'::uuid` → error 22P02 `"invalid input syntax for type uuid: \"null\""`.
-
-**Solución**: Reemplacé la función `uid()` para que use `supabase.auth.getUser()`:
-
-```javascript
-const uid = async () => {
-  const { data: { user} } = await supabase.auth.getUser();
-  return user?.id || null;
-};
-```
-
-Además, transformé todas las llamadas `const id = uid();` en `const id = await uid();` (21 replacements).
-
-**Archivos modificados**:
-- `src/lib/storageAdapter.js` — función `uid()` async + `await` en todas las llamadas.
-
-### Fix 2: "Unexpected Application Error!" en Licencias
-
-**Problema**: En `src/features/leaves/hooks.js` línea 19:
-```js
-setError(err(l) ? l.error : null);
-```
-`err(l)` retornaba `l.error` (el objeto completo de error de Supabase/Postgres). Luego en `LeavesPage.jsx` se renderiza `{error}` — React no puede renderizar un objeto como child y lanza "Objects are not valid as a React child". El error no capturado sube al Router, que muestra su errorElement por defecto: **"Unexpected Application Error!"**.
-
-**Solución**:
-```js
-setError(l.error ? l.error.message : null);
-```
-
-**Archivo modificado**:
-- `src/features/leaves/hooks.js` — línea 19.
-
-### Nota 3: HousesPage (stub)
-La página `/casas` muestra "x"/"hi". Pendiente de implementar.
-
-### Nota 4: SettingsPage setProfile/setSettings
-La página `/ajustes` usa setters no expuestos por el hook. Provocaría `ReferenceError` al escribir. Corrección: exponer setters desde `useSettings` o usar un estado local.
+- **React 18 + React Router v6** (router hash-based).
+- **Supabase** como BaaS (autenticación, PostgreSQL, REST API). Si no hay `VITE_SUPABASE_URL/KEY` → modo demo con localStorage.
+- **Patrón de adaptadores**: `src/lib/storageAdapter.js` provee dos adaptadores: `supabaseAdapter()` (cuando hay configuración de Supabase) y `localStorageAdapter()` (modo demo con datos de ejemplo).
+- **Convención**: el aislamiento de datos por usuario se hace filtrando por `user_id` en TODAS las consultas (la BD no tiene RLS activado).
+- **Dominio** (`src/domain/`): lógica de negocio pura (cálculo de escalas, antigüedad, vacaciones, cuotas, settlements).
+- **Features** (`src/features/*`): cada módulo de la UI (auth, employees, scales, contributions, holidays, leaves, houses, settlements, dashboard, settings).
 
 ---
 
@@ -91,16 +61,6 @@ La página `/ajustes` usa setters no expuestos por el hook. Provocaría `Referen
 
 ---
 
-## Resumen de cambios aplicados
-
-1. **`src/lib/storageAdapter.js`**: `uid()` usa `supabase.auth.getUser()`; 21 llamadas actualizadas a `await uid()`.
-2. **`src/features/leaves/hooks.js`**: `setError` ahora recibe el mensaje string en vez del objeto de error.
-
-**Resultado**: 
-- Empleadas/Escalas/Cuotas/Feriados ya no muestran `invalid input syntax for type uuid: "null"` (con usuario logueado).
-- Licencias ya no muestra "Unexpected Application Error!" y muestra el mensaje de error correcto.
-
-Este manual quedó en `manual.md` en la raíz del proyecto, listo como base para otra IA o consulta humana.
 ### 6. Leaves / Licencias (`src/features/leaves/`)
 
 - **Propósito**: Registrar licencias (vacaciones, enfermedad, maternidad, especiales). El saldo de vacaciones se calcula con la antigüedad real.
@@ -202,9 +162,21 @@ Este manual quedó en `manual.md` en la raíz del proyecto, listo como base para
   - `HolidayForm.jsx`: fecha (date input), descripción.
   - `HolidayList.jsx`: tabla ordenada por fecha, editar/borrar.
 - **Uso interno**: El módulo de settlements usa `holidaysInMonth(period, holidays)` para excluir feriados de días esperados y calcular recargos por feriado trabajado.
-- **React 18 + React Router v6** (router hash-based).
-- **Supabase** como BaaS (autenticación, PostgreSQL, REST API). Si no hay `VITE_SUPABASE_URL/KEY` → modo demo con localStorage.
-- **Patrón de adaptadores**: `src/lib/storageAdapter.js` provee dos adaptadores: `supabaseAdapter()` (cuando hay configuración de Supabase) y `localStorageAdapter()` (modo demo con datos de ejemplo).
-- **Convención**: el aislamiento de datos por usuario se hace filtrando por `user_id` en TODAS las consultas (la BD no tiene RLS activado).
-- **Dominio** (`src/domain/`): lógica de negocio pura (cálculo de escalas, antigüedad, vacaciones, cuotas, settlements).
-- **Features** (`src/features/*`): cada módulo de la UI (auth, employees, scales, contributions, holidays, leaves, houses, settlements, dashboard, settings).
+
+
+
+## Resumen de cambios aplicados
+### Fixes de errores reportados
+1. Adaptador Supabase uid() -> supabase.auth.getUser(); 21 llamadas actualizadas a await uid().
+2. Leaves hooks: setError ahora recibe el mensaje string del error.
+3. Settings: los setters setSettings/setProfile ahora se exponen desde useSettings.
+
+### Fix nuevo (2026-11-14): Crash en /empleados
+4. EmployeesPage renderiza el drawer solo si emp existe; EmployeeDrawer usa employee?.id y early return si no hay empleado.
+
+### Commits recientes
+- 4724d11 feat: implement demo mode for authentication and enhance error handling in registration and login
+- bbb3be7 feat: add gh-pages dependency and improve supabase client configuration
+- 5d5b74b feat: app completa de liquidacion de personal casas particulares (Ley 26.844)
+
+Este manual quedo en manual.md en la raiz del proyecto, listo como base para otra IA o consulta humana.
