@@ -181,15 +181,6 @@ function localStorageAdapter() {
       write('employees', es, userId);
       return { data: rec, error: null };
     },
-    async deleteEmployee(id) {
-      ensure(); let es = read('employees', userId).filter((x) => x.id !== id);
-      write('employees', es, userId);
-      let as = read('assignments', userId).filter((x) => x.employee_id !== id);
-      write('assignments', as, userId);
-      let ls = read('leaves', userId).filter((x) => x.employee_id !== id);
-      write('leaves', ls, userId);
-      return { error: null };
-    },
     // assignments
     async getAssignments() { ensure(); return { data: read('assignments', userId), error: null }; },
     async saveAssignment(assignment) {
@@ -352,15 +343,107 @@ const EMPLOYEE_COLUMNS = [
   'valor_hora_override', 'valor_mensual_override', 'notas'
 ];
 
+// Caché de lecturas del adaptador remoto. Se mantiene separada de la sesión
+// administrada por supabase-js y de los datos del modo demo.
+const REMOTE_CACHE_PREFIX = `${PREFIX}supabase-cache:v1:`;
+const REMOTE_CACHE_TTL_MS = 15 * 60 * 1000;
+
+function remoteCacheKey(userId, resource) {
+  return `${REMOTE_CACHE_PREFIX}${userId}:${resource}`;
+}
+
+function readRemoteCache(userId, resource) {
+  try {
+    const raw = localStorage.getItem(remoteCacheKey(userId, resource));
+    if (!raw) return { hit: false, data: null };
+
+    const entry = JSON.parse(raw);
+    if (!entry || entry.expiresAt <= Date.now()) {
+      localStorage.removeItem(remoteCacheKey(userId, resource));
+      return { hit: false, data: null };
+    }
+
+    return { hit: true, data: entry.data };
+  } catch {
+    return { hit: false, data: null };
+  }
+}
+
+function writeRemoteCache(userId, resource, data) {
+  try {
+    localStorage.setItem(remoteCacheKey(userId, resource), JSON.stringify({
+      expiresAt: Date.now() + REMOTE_CACHE_TTL_MS,
+      data
+    }));
+  } catch {
+    // Una cuota llena o localStorage no disponible no debe impedir usar la app.
+  }
+}
+
+function clearRemoteCache(userId, resource) {
+  try {
+    const prefix = resource
+      ? remoteCacheKey(userId, resource)
+      : `${REMOTE_CACHE_PREFIX}${userId}:`;
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const storageKey = localStorage.key(index);
+      if (storageKey && (storageKey === prefix || storageKey.startsWith(`${prefix}:`))) {
+        localStorage.removeItem(storageKey);
+      }
+    }
+  } catch {
+    // Si no se puede acceder al storage, la siguiente lectura consultará Supabase.
+  }
+}
+
 function supabaseAdapter() {
+  const pendingReads = new Map();
+  let currentUserId = null;
+  let pendingSession = null;
+
   const uid = async () => {
-    const { data: { user} } = await supabase.auth.getUser();
-    return user?.id || null;
+    if (currentUserId) return currentUserId;
+
+    if (!pendingSession) {
+      pendingSession = supabase.auth.getSession()
+        .then(({ data }) => {
+          currentUserId = data.session?.user?.id || null;
+          return currentUserId;
+        })
+        .finally(() => {
+          pendingSession = null;
+        });
+    }
+
+    return pendingSession;
+  };
+
+  const cachedRead = async (userId, resource, request) => {
+    const cached = readRemoteCache(userId, resource);
+    if (cached.hit) return { data: cached.data, error: null };
+
+    const cacheKey = remoteCacheKey(userId, resource);
+    if (pendingReads.has(cacheKey)) return pendingReads.get(cacheKey);
+
+    const pending = request()
+      .then(({ data, error }) => {
+        if (!error) writeRemoteCache(userId, resource, data);
+        return { data, error };
+      })
+      .finally(() => pendingReads.delete(cacheKey));
+
+    pendingReads.set(cacheKey, pending);
+    return pending;
+  };
+
+  const invalidate = (userId, ...resources) => {
+    resources.forEach((resource) => clearRemoteCache(userId, resource));
   };
 
   return {
     async signUp({ email, password }) {
       const { data, error } = await supabase.auth.signUp({ email, password });
+      if (!error && data.session?.user?.id) currentUserId = data.session.user.id;
       if (!error && data?.user?.id) {
         // Crear la fila de perfil del nuevo usuario (getProfile también la autocrea, así queda desde el inicio)
         await supabase.from('profiles').upsert({ id: data.user.id }, { onConflict: 'id' }).select().single();
@@ -369,58 +452,77 @@ function supabaseAdapter() {
     },
     async signIn({ email, password }) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!error) currentUserId = data.session?.user?.id || null;
       return { data, error };
     },
     async signOut() {
+      const id = await uid();
       const { error } = await supabase.auth.signOut();
+      if (!error) {
+        if (id) clearRemoteCache(id);
+        currentUserId = null;
+      }
       return { error };
     },
     async getSession() {
       const { data, error } = await supabase.auth.getSession();
+      if (!error) currentUserId = data.session?.user?.id || null;
       return { data, error };
     },
     onAuthStateChange(cb) {
-      const { data } = supabase.auth.onAuthStateChange(cb);
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        currentUserId = session?.user?.id || null;
+        cb(event, session);
+      });
       return data;
     },
     async getProfile() {
       const id = await uid();
       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       // maybeSingle: con 0 filas devuelve { data: null, error: null }; .single() respondía 406 (PGRST116)
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+      const { data, error } = await cachedRead(id, 'profiles', () =>
+        supabase.from('profiles').select('*').eq('id', id).maybeSingle()
+      );
       if (error) return { data: null, error };
       if (data) return { data, error: null };
       // Sin fila aún (usuarios creados antes de que existiera el perfil): autocrear perfil vacío
       const created = await supabase.from('profiles').upsert({ id }, { onConflict: 'id' }).select().single();
+      if (!created.error) writeRemoteCache(id, 'profiles', created.data);
       return { data: created.data, error: created.error };
     },
     async saveProfile(profile) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('profiles').upsert({ ...profile, id }, { onConflict: 'id' }).select().single();
+      if (!error) writeRemoteCache(id, 'profiles', data);
       return { data, error };
     },
     async getHouses() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('houses').select('*').eq('user_id', id).order('created_at', { ascending: false });
-      return { data, error };
+      return cachedRead(id, 'houses', () =>
+        supabase.from('houses').select('*').eq('user_id', id).order('created_at', { ascending: false })
+      );
     },
     async saveHouse(house) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('houses').upsert({ ...house, user_id: id }).select().single();
+      if (!error) invalidate(id, 'houses');
       return { data, error };
     },
     async deleteHouse(id) {
       const { error } = await supabase.from('houses').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'houses');
       return { error };
     },
     async getEmployees() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('employees').select('*').eq('user_id', id).order('nombre', { ascending: true });
-      return { data, error };
+      return cachedRead(id, 'employees', () =>
+        supabase.from('employees').select('*').eq('user_id', id).order('nombre', { ascending: true })
+      );
     },
     async saveEmployee(employee) {
       const id = await uid();
@@ -432,130 +534,158 @@ function supabaseAdapter() {
       if (clean.fecha_ingreso === '') clean.fecha_ingreso = null;
       clean.user_id = id;
       const { data, error } = await supabase.from('employees').upsert(clean).select().single();
+      if (!error) invalidate(id, 'employees');
       return { data, error };
-    },
-    async deleteEmployee(id) {
-      const { error } = await supabase.from('employees').delete().eq('id', id);
-      return { error };
     },
     async getAssignments() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('assignments').select('*').eq('user_id', id);
-      return { data, error };
+      return cachedRead(id, 'assignments', () => supabase.from('assignments').select('*').eq('user_id', id));
     },
     async saveAssignment(assignment) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('assignments').upsert({ ...assignment, user_id: id }).select().single();
+      if (!error) invalidate(id, 'assignments');
       return { data, error };
     },
     async deleteAssignment(id) {
       const { error } = await supabase.from('assignments').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'assignments');
       return { error };
     },
     async getSalaryScales() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('salary_scales').select('*').eq('user_id', id).order('vigencia_desde', { ascending: false });
-      return { data, error };
+      return cachedRead(id, 'salary_scales', () =>
+        supabase.from('salary_scales').select('*').eq('user_id', id).order('vigencia_desde', { ascending: false })
+      );
     },
     async saveSalaryScale(scale) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('salary_scales').upsert({ ...scale, user_id: id }).select().single();
+      if (!error) invalidate(id, 'salary_scales');
       return { data, error };
     },
     async deleteSalaryScale(id) {
       const { error } = await supabase.from('salary_scales').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'salary_scales');
       return { error };
     },
     async getContributionRates() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('contribution_rates').select('*').eq('user_id', id).order('vigencia_desde', { ascending: false });
-      return { data, error };
+      return cachedRead(id, 'contribution_rates', () =>
+        supabase.from('contribution_rates').select('*').eq('user_id', id).order('vigencia_desde', { ascending: false })
+      );
     },
     async saveContributionRate(rate) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('contribution_rates').upsert({ ...rate, user_id: id }).select().single();
+      if (!error) invalidate(id, 'contribution_rates');
       return { data, error };
     },
     async deleteContributionRate(id) {
       const { error } = await supabase.from('contribution_rates').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'contribution_rates');
       return { error };
     },
     async getHolidays() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('holidays').select('*').eq('user_id', id).order('fecha', { ascending: true });
-      return { data, error };
+      return cachedRead(id, 'holidays', () =>
+        supabase.from('holidays').select('*').eq('user_id', id).order('fecha', { ascending: true })
+      );
     },
     async saveHoliday(holiday) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('holidays').insert({ ...holiday, user_id: id }).select().single();
+      if (!error) invalidate(id, 'holidays');
       return { data, error };
     },
     async deleteHoliday(id) {
       const { error } = await supabase.from('holidays').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'holidays');
       return { error };
     },
     async getSettlements() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('settlements').select('*').eq('user_id', id).order('periodo', { ascending: false });
-      return { data, error };
+      return cachedRead(id, 'settlements', () =>
+        supabase.from('settlements').select('*').eq('user_id', id).order('periodo', { ascending: false })
+      );
     },
     async saveSettlement(settlement) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('settlements').upsert(settlement).select().single();
+      const { data, error } = await supabase.from('settlements').upsert({ ...settlement, user_id: id }).select().single();
+      if (!error) invalidate(id, 'settlements');
       return { data, error };
     },
     async deleteSettlement(id) {
       const { error } = await supabase.from('settlements').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'settlements', 'settlement_lines');
       return { error };
     },
     async getSettlementLines(settlementId) {
-      const { data, error } = await supabase.from('settlement_lines').select('*').eq('settlement_id', settlementId);
-      return { data, error };
+      const id = await uid();
+      if (!id) return { data: null, error: { message: 'Sin sesión' } };
+      return cachedRead(id, `settlement_lines:${settlementId}`, () =>
+        supabase.from('settlement_lines').select('*').eq('settlement_id', settlementId)
+      );
     },
     async saveSettlementLine(line) {
       const { data, error } = await supabase.from('settlement_lines').insert(line).select().single();
+      const id = await uid();
+      if (!error && id) invalidate(id, `settlement_lines:${line.settlement_id}`);
       return { data, error };
     },
     async deleteSettlementLine(id) {
       const { error } = await supabase.from('settlement_lines').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'settlement_lines');
       return { error };
     },
     async getLeaves() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('leaves').select('*').eq('user_id', id).order('desde', { ascending: true });
-      return { data, error };
+      return cachedRead(id, 'leaves', () =>
+        supabase.from('leaves').select('*').eq('user_id', id).order('desde', { ascending: true })
+      );
     },
     async saveLeave(leave) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('leaves').insert({ ...leave, user_id: id }).select().single();
+      if (!error) invalidate(id, 'leaves');
       return { data, error };
     },
     async deleteLeave(id) {
       const { error } = await supabase.from('leaves').delete().eq('id', id);
+      const userId = await uid();
+      if (!error && userId) invalidate(userId, 'leaves');
       return { error };
     },
     async getSettings() {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
-      const { data, error } = await supabase.from('settings').select('*').eq('user_id', id).maybeSingle();
-      return { data, error };
+      return cachedRead(id, 'settings', () =>
+        supabase.from('settings').select('*').eq('user_id', id).maybeSingle()
+      );
     },
     async saveSettings(settings) {
       const id = await uid();
        if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('settings').upsert({ ...settings, user_id: id }).select().single();
+      if (!error) writeRemoteCache(id, 'settings', data);
       return { data, error };
     },
     async exportData() {
@@ -585,6 +715,7 @@ function supabaseAdapter() {
             await supabase.from(t).upsert(cleaned);
           }
         }
+        clearRemoteCache(id);
         return { data: { ok: true }, error: null };
       } catch (e) {
         return { data: null, error: { message: 'JSON inválido' } };

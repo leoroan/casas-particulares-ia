@@ -21,7 +21,6 @@ export const DIAS_SEMANA = [
 export const employeesApi = {
   list: () => adapter.getEmployees(),
   save: (employee) => adapter.saveEmployee(employee),
-  remove: (id) => adapter.deleteEmployee(id),
   getAssignments: () => adapter.getAssignments(),
   getSettlements: () => adapter.getSettlements(),
   getLeaves: () => adapter.getLeaves()

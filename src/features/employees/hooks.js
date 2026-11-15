@@ -36,13 +36,7 @@ export function useEmployees() {
     return { data: res, error: err };
   }, []);
 
-  const remove = useCallback(async (id) => {
-    const { error: err } = await employeesApi.remove(id);
-    if (!err) setData((prev) => prev.filter((x) => x.id !== id));
-    return { error: err };
-  }, []);
-
-  return { data, loading, error, save, remove };
+  return { data, loading, error, save };
 }
 
 export function useEmployeeContext(employeeId) {

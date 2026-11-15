@@ -1,14 +1,13 @@
 import { useState } from 'react';
 import { CATEGORIAS } from '../api.js';
+import Toast from '../../../components/ui/Toast.jsx';
 
-export default function EmployeeList({ employees, onSave, onRemove, onView }) {
+export default function EmployeeList({ employees, onSave, onEdit, onView }) {
   const [q, setQ] = useState('');
   const [catFilter, setCatFilter] = useState('');
   const [activoFilter, setActivoFilter] = useState('');
   const [sort, setSort] = useState('nombre');
-  const [editing, setEditing] = useState(null);
-  const [deleting, setDeleting] = useState(null);
-  const [undo, setUndo] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (msg, type = 'success') => {
@@ -16,6 +15,10 @@ export default function EmployeeList({ employees, onSave, onRemove, onView }) {
     setToasts((t) => [...t, { id, msg, type }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   };
+
+  function removeToast(id) {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }
 
   const filtered = employees
     .filter((e) => {
@@ -29,32 +32,20 @@ export default function EmployeeList({ employees, onSave, onRemove, onView }) {
       return 0;
     });
 
-  async function handleSave(emp) {
-    const { data, error } = await onSave(emp);
-    setEditing(null);
-    if (!error) addToast('Empleada guardada');
-    else addToast(error.message || 'Error al guardar', 'error');
-    return data;
-  }
-
-  async function handleRemove(id) {
-    setDeleting(id);
-    const snapshot = employees.find((e) => e.id === id);
-    const { error } = await onRemove(id);
-    if (!error) {
-      addToast('Empleada eliminada', 'success');
-      setUndo({ id, snapshot });
-      setTimeout(() => setUndo(null), 6000);
-    } else {
-      setDeleting(null);
-      addToast(error.message || 'Error al eliminar', 'error');
+  async function handleToggleActive(employee) {
+    const nextActive = !employee.activo;
+    if (!nextActive && !window.confirm(`¿Desactivar a ${employee.nombre}? Se conservará su historial y no aparecerá en futuras liquidaciones.`)) {
+      return;
     }
-  }
 
-  function restore() {
-    if (!undo) return;
-    onSave(undo.snapshot);
-    setUndo(null);
+    setUpdatingId(employee.id);
+    const { error } = await onSave({ ...employee, activo: nextActive });
+    if (!error) {
+      addToast(nextActive ? 'Empleada reactivada' : 'Empleada desactivada');
+    } else {
+      addToast(error.message || 'Error al actualizar el estado', 'error');
+    }
+    setUpdatingId(null);
   }
 
   return (
@@ -96,39 +87,34 @@ export default function EmployeeList({ employees, onSave, onRemove, onView }) {
             ) : (
               filtered.map((e) => (
                 <tr key={e.id}>
-                  {editing && editing.id === e.id ? (
-                    <td colSpan="6"><EmployeeForm employee={e} onSave={handleSave} onCancel={() => setEditing(null)} /></td>
-                  ) : (
-                    <>
-                      <td>{e.nombre}</td>
-                      <td><span className="badge bg-secondary text-wrap" style={{ maxWidth: '160px' }}>{e.categoria}</span></td>
-                      <td>{e.horas_dia}</td>
-                      <td>{(e.dias_semana || []).length}</td>
-                      <td><span className={`badge ${e.activo ? 'bg-success' : 'bg-secondary'}`}>{e.activo ? 'Activa' : 'Inactiva'}</span></td>
-                      <td className="text-end">
-                        {deleting === e.id ? (
-                          <span className="spinner-border spinner-border-sm"></span>
-                        ) : (
-                          <>
-                            <button className="btn btn-sm btn-outline-primary" onClick={() => { setEditing(e); onView(e.id); }}>Ver detalle</button>
-                            <button className="btn btn-sm btn-outline-primary" onClick={() => setEditing(e)}>Editar</button>
-                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleRemove(e.id)}>Borrar</button>
-                          </>
-                        )}
-                      </td>
-                    </>
-                  )}
+                  <td>{e.nombre}</td>
+                  <td><span className="badge bg-secondary text-wrap" style={{ maxWidth: '160px' }}>{e.categoria || '-'}</span></td>
+                  <td>{e.horas_dia ?? '-'}</td>
+                  <td>{(e.dias_semana || []).length}</td>
+                  <td><span className={`badge ${e.activo ? 'bg-success' : 'bg-secondary'}`}>{e.activo ? 'Activa' : 'Inactiva'}</span></td>
+                  <td className="text-end">
+                    {updatingId === e.id ? (
+                      <span className="spinner-border spinner-border-sm" role="status" aria-label="Actualizando estado" />
+                    ) : (
+                      <div className="d-inline-flex flex-wrap justify-content-end gap-1">
+                        <button className="btn btn-sm btn-outline-primary" onClick={() => onView(e.id)}>Ver detalle</button>
+                        <button className="btn btn-sm btn-outline-primary" onClick={() => onEdit(e)}>Editar</button>
+                        <button
+                          className={`btn btn-sm ${e.activo ? 'btn-outline-warning' : 'btn-outline-success'}`}
+                          onClick={() => handleToggleActive(e)}
+                        >
+                          {e.activo ? 'Desactivar' : 'Reactivar'}
+                        </button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
-      {undo && (
-        <div className="alert alert-info d-flex align-items-center mb-3">
-          Empleada eliminada. <button className="btn btn-sm btn-outline-primary ms-2" onClick={restore}>Deshacer</button>
-        </div>
-      )}
+      <Toast toasts={toasts} onRemove={removeToast} />
     </>
   );
 }
