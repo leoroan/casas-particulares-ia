@@ -24,8 +24,10 @@ export function useSettings() {
       try {
         const [st, pr] = await Promise.all([settingsApi.getSettings(), settingsApi.getProfile()]);
         if (mounted) {
-          setSettings({ ...DEFAULTS, ...(st?.datos || {}) });
-          setProfile(pr || { nombre: '', cuit: '', domicilio: '' });
+          // Los adaptadores devuelven { data, error }; hay que desenvolver .data antes de usar
+          setSettings({ ...DEFAULTS, ...(st?.data?.datos || {}) });
+          setProfile(pr?.data || { nombre: '', cuit: '', domicilio: '' });
+          setError(st?.error?.message || pr?.error?.message || null);
         }
       } finally {
         if (mounted) setLoading(false);

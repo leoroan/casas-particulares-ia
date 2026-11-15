@@ -63,7 +63,7 @@ export default function EmployeeForm({ employee, onSave, onCancel }) {
             </select>
           </div>
           <div className="col-md-4 mb-3">
-            <label className="form-label">Horas por d&iacute;a</label>
+            <label className="form-label">Horas por día</label>
             <input type="number" className="form-control" value={form.horas_dia} onChange={(e) => setForm({ ...form, horas_dia: e.target.value })} />
           </div>
         </div>
@@ -88,7 +88,7 @@ export default function EmployeeForm({ employee, onSave, onCancel }) {
           </div>
         </div>
         <div className="mb-3">
-          <label className="form-label">D&iacute;as de la semana</label>
+          <label className="form-label">Días de la semana</label>
           <div className="d-flex flex-wrap gap-2">
             {DIAS_SEMANA.map((d) => (
               <button

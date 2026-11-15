@@ -18,7 +18,7 @@ export default function LoginForm({ onRegister }) {
   return (
     <div className="card shadow-sm">
       <div className="card-body p-4">
-        <h2 className="card-title mb-3 text-center">Iniciar sesi&oacute;n</h2>
+        <h2 className="card-title mb-3 text-center">Iniciar sesión</h2>
         {error && (
           <div className="alert alert-danger mb-3" role="alert">
             {error}
@@ -37,7 +37,7 @@ export default function LoginForm({ onRegister }) {
             />
             {isDemoMode && (
               <div className="form-text text-info">
-                Modo demo: us&aacute; cualquier email y contraseña (demo/demo).
+                Modo demo: usá cualquier email y contraseña (demo/demo).
               </div>
             )}
           </div>

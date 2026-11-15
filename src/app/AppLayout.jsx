@@ -73,9 +73,9 @@ export default function AppLayout() {
 
       <footer className="border-top mt-auto py-4">
         <div className="container small muted">
-          {APP_NAME} - Liquidaci&oacute;n de personal de casas particulares (Ley 26.844, Argentina).{' '}
+          {APP_NAME} - Liquidación de personal de casas particulares (Ley 26.844, Argentina).{' '}
           <strong className="text-danger">Aviso legal:</strong> Valores de referencia. Verificar escalas y cuotas vigentes en ARCA
-          y la Comisi&oacute;n Nacional de Trabajo en Casas Particulares.
+          y la Comisión Nacional de Trabajo en Casas Particulares.
         </div>
       </footer>
     </div>

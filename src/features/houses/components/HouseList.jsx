@@ -47,7 +47,7 @@ export default function HouseList({ houses, onSave, onRemove }) {
         <table className="table table-hover align-middle">
           <thead>
             <tr>
-              <th>Alias</th><th>Direcci&oacute;n</th><th>Notas</th><th className="text-end">Acciones</th>
+              <th>Alias</th><th>Dirección</th><th>Notas</th><th className="text-end">Acciones</th>
             </tr>
           </thead>
           <tbody>

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useDashboard } from '../hooks.js';
 import { periodLabel } from '../../../lib/format.js';
 
@@ -5,7 +6,7 @@ export default function DashboardPage() {
   const {
     activeEmployees, settlements, scales, profile, loading,
     currentMonth, setCurrentMonth, totalNetoMes, totalBrutoMes,
-    currentMonthSettlements, escalaVieja, sacMes, money
+    currentMonthSettlements, sinEscalas, escalaVieja, sacMes, money
   } = useDashboard();
 
   if (loading) return <div className="text-center py-5">Cargando dashboard...</div>;
@@ -30,9 +31,14 @@ export default function DashboardPage() {
         </div></div></div>
       </div>
 
+      {sinEscalas && (
+        <div className="alert alert-warning mb-3">
+          Atención: no hay escalas salariales cargadas para esta sesión. Cargá una en <Link to="/escalas" className="alert-link">Escalas</Link> antes de liquidar.
+        </div>
+      )}
       {escalaVieja && (
         <div className="alert alert-warning mb-3">
-          Atenci&oacute;n: la escala salarial m&aacute;s reciente tiene m&aacute;s de 2 meses de antigedad. Actualizala en Escalas antes de liquidar.
+          Atención: la escala salarial más reciente tiene más de 2 meses de antigüedad. Actualizala en <Link to="/escalas" className="alert-link">Escalas</Link> antes de liquidar.
         </div>
       )}
       {sacMes && (
@@ -58,11 +64,11 @@ export default function DashboardPage() {
                     return (
                       <tr key={emp.id}>
                         <td>{emp.nombre}</td>
-                        <td>{last ? periodLabel(last.periodo) : '<span class="text-muted">—</span>'}</td>
-                        <td className="text-end">{empSett ? money(empSett.neto) : '<span class="text-muted">—</span>'}</td>
+                        <td>{last ? periodLabel(last.periodo) : <span className="text-muted">—</span>}</td>
+                        <td className="text-end">{empSett ? money(empSett.neto) : <span className="text-muted">—</span>}</td>
                         <td className="text-end">
                           {!empSett && (
-                            <a href="/liquidar" className="btn btn-sm btn-cp">Liquidar</a>
+                            <Link to="/liquidar" className="btn btn-sm btn-cp">Liquidar</Link>
                           )}
                         </td>
                       </tr>
@@ -76,7 +82,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="d-grid">
-        <a href="/liquidar" className="btn btn-cp btn-lg">Liquidar mes ahora</a>
+        <Link to="/liquidar" className="btn btn-cp btn-lg">Liquidar mes ahora</Link>
       </div>
     </div>
   );

@@ -47,9 +47,9 @@ export default function RegisterForm({ onLogin }) {
           </button>
         </form>
         <div className="text-center text-muted small">
-          Ya ten&eacute;s cuenta?{' '}
+          ¿Ya tenés cuenta?{' '}
           <button type="button" className="btn btn-link text-primary p-0" onClick={() => navigate("/login")}>
-            Iniciar sesi&oacute;n
+            Iniciar sesión
           </button>
         </div>
       </div>

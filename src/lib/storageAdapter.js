@@ -331,7 +331,7 @@ function localStorageAdapter() {
         }
         return { data: { ok: true }, error: null };
       } catch (e) {
-        return { data: null, error: { message: 'JSON invÃ¡lido' } };
+        return { data: null, error: { message: 'JSON inválido' } };
       }
     }
   };
@@ -361,6 +361,10 @@ function supabaseAdapter() {
   return {
     async signUp({ email, password }) {
       const { data, error } = await supabase.auth.signUp({ email, password });
+      if (!error && data?.user?.id) {
+        // Crear la fila de perfil del nuevo usuario (getProfile también la autocrea, así queda desde el inicio)
+        await supabase.from('profiles').upsert({ id: data.user.id }, { onConflict: 'id' }).select().single();
+      }
       return { data, error };
     },
     async signIn({ email, password }) {
@@ -381,9 +385,14 @@ function supabaseAdapter() {
     },
     async getProfile() {
       const id = await uid();
-      if (!id) return { data: null, error: { message: 'Sin sesiÃ³n' } };
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-      return { data, error };
+      if (!id) return { data: null, error: { message: 'Sin sesión' } };
+      // maybeSingle: con 0 filas devuelve { data: null, error: null }; .single() respondía 406 (PGRST116)
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+      if (error) return { data: null, error };
+      if (data) return { data, error: null };
+      // Sin fila aún (usuarios creados antes de que existiera el perfil): autocrear perfil vacío
+      const created = await supabase.from('profiles').upsert({ id }, { onConflict: 'id' }).select().single();
+      return { data: created.data, error: created.error };
     },
     async saveProfile(profile) {
       const id = await uid();
@@ -578,7 +587,7 @@ function supabaseAdapter() {
         }
         return { data: { ok: true }, error: null };
       } catch (e) {
-        return { data: null, error: { message: 'JSON invÃ¡lido' } };
+        return { data: null, error: { message: 'JSON inválido' } };
       }
     }
   };

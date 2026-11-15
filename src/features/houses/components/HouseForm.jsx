@@ -28,7 +28,7 @@ export default function HouseForm({ house, onSave, onCancel }) {
             />
           </div>
           <div className="col-md-6 mb-3">
-            <label className="form-label">Direcci&oacute;n</label>
+            <label className="form-label">Dirección</label>
             <input
               type="text" className="form-control"
               value={direccion} onChange={(e) => setDireccion(e.target.value)}

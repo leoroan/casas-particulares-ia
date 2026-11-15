@@ -3,7 +3,7 @@ import { CATEGORIAS } from '../../employees/api.js';
 
 export default function ScaleForm({ scale, onSave, onCancel }) {
   const [form, setForm] = useState({
-    vigenciaDesde: scale ? scale.vigenciaDesde : '',
+    vigencia_desde: scale ? (scale.vigencia_desde || '').slice(0, 7) : '',
     categoria: scale ? scale.categoria : CATEGORIAS[0],
     conRetiro: scale ? scale.con_retiro : true,
     valorHora: scale ? String(scale.valor_hora || '') : '',
@@ -14,10 +14,12 @@ export default function ScaleForm({ scale, onSave, onCancel }) {
   function handleSubmit(e) {
     e.preventDefault();
     onSave({
-      ...form,
+      vigencia_desde: form.vigencia_desde ? `${form.vigencia_desde}-01` : '',
+      categoria: form.categoria,
       valor_hora: Number(form.valorHora || 0),
       valor_mensual: Number(form.valorMensual || 0),
       con_retiro: form.conRetiro,
+      fuente: form.fuente,
       ...(scale ? { id: scale.id } : {})
     });
   }
@@ -29,7 +31,7 @@ export default function ScaleForm({ scale, onSave, onCancel }) {
         <div className="row">
           <div className="col-md-3 mb-3">
             <label className="form-label">Vigencia desde</label>
-            <input type="month" className="form-control" value={form.vigenciaDesde} onChange={(e) => setForm({ ...form, vigenciaDesde: e.target.value ? e.target.value + '-01' : '' })} required />
+            <input type="month" className="form-control" value={form.vigencia_desde} onChange={(e) => setForm({ ...form, vigencia_desde: e.target.value })} required />
           </div>
           <div className="col-md-3 mb-3">
             <label className="form-label">Categoría</label>

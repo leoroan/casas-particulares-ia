@@ -9,7 +9,10 @@ export function useDashboard() {
   const [scales, setScales] = useState([]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [currentMonth, setCurrentMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -44,15 +47,15 @@ export function useDashboard() {
   const totalNetoMes = useMemo(() => currentMonthSettlements.reduce((s, x) => s + (x.neto || 0), 0), [currentMonthSettlements]);
   const totalBrutoMes = useMemo(() => currentMonthSettlements.reduce((s, x) => s + (x.total || 0), 0), [currentMonthSettlements]);
 
-  const escalaVieja = useMemo(() => {
+  const estadoEscalas = useMemo(() => {
     const mesesAlerta = 2;
-    if (!scales || scales.length === 0) return true;
+    if (!scales || scales.length === 0) return { sinEscalas: true, escalaVieja: false };
     const latest = latestScaleDate(scales);
-    if (!latest) return true;
+    if (!latest) return { sinEscalas: true, escalaVieja: false };
     const latestDate = new Date(latest + 'T00:00:00');
     const cutoff = new Date();
     cutoff.setMonth(cutoff.getMonth() - mesesAlerta);
-    return latestDate < cutoff;
+    return { sinEscalas: false, escalaVieja: latestDate < cutoff };
   }, [scales]);
 
   const sacMes = useMemo(() => {
@@ -60,5 +63,5 @@ export function useDashboard() {
     return m === 6 || m === 12;
   }, [currentMonth]);
 
-  return { settlements, employees, activeEmployees, scales, profile, loading, currentMonth, setCurrentMonth, totalNetoMes, totalBrutoMes, currentMonthSettlements, escalaVieja, sacMes, money };
+  return { settlements, employees, activeEmployees, scales, profile, loading, currentMonth, setCurrentMonth, totalNetoMes, totalBrutoMes, currentMonthSettlements, ...estadoEscalas, sacMes, money };
 }

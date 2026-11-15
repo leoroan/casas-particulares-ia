@@ -100,7 +100,7 @@ export default function SettingsPage() {
         <div className="card-body border-top">
           <p className="small text-muted mb-0">
             <strong>Aviso legal:</strong> Valores de referencia. Verificar escalas y cuotas vigentes en ARCA y la
-            Comisi&oacute;n Nacional de Trabajo en Casas Particulares.
+            Comisión Nacional de Trabajo en Casas Particulares.
           </p>
         </div>
       </div>
