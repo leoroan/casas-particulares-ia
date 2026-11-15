@@ -6,9 +6,9 @@ import { vacationDaysBySeniority } from '../../../domain/vacations.js';
 
 export default function EmployeeDrawer({ employee, onClose }) {
   const [open, setOpen] = useState(true);
-  const { assignments, settlements, leaves, loading } = useEmployeeContext(employee.id);
+  const { assignments, settlements, leaves, loading } = useEmployeeContext(employee?.id);
 
-  if (!open) return null;
+  if (!open || !employee) return null;
 
   const anos = realSeniorityYears(employee.fecha_ingreso, new Date().toISOString().slice(0, 10));
   const vac = vacationDaysBySeniority(anos);

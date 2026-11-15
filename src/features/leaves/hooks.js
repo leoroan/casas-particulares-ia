@@ -16,7 +16,7 @@ export function useLeaves() {
         if (mounted) {
           setData(l.data || []);
           setEmployees(e.data || []);
-          setError(err(l) ? l.error : null);
+          setError(l.error ? l.error.message : null);
         }
       } catch (ex) {
         if (mounted) setError(ex.message);

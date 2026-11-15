@@ -1,4 +1,4 @@
-import { supabase, hasSupabaseConfig } from './supabaseClient.js';
+﻿import { supabase, hasSupabaseConfig } from './supabaseClient.js';
 import { DEMO_USER, CONFIG } from '../config.js';
 
 const PREFIX = 'cp_';
@@ -331,7 +331,7 @@ function localStorageAdapter() {
         }
         return { data: { ok: true }, error: null };
       } catch (e) {
-        return { data: null, error: { message: 'JSON inválido' } };
+        return { data: null, error: { message: 'JSON invÃ¡lido' } };
       }
     }
   };
@@ -345,9 +345,9 @@ function recCreated(rec, existing) {
 }
 // ---------- adaptador Supabase ----------
 function supabaseAdapter() {
-  const uid = () => {
-    const s = localStorage.getItem(`sb-${DEMO_ID}-auth-token`);
-    return s ? JSON.parse(s).user.id : null;
+  const uid = async () => {
+    const { data: { user} } = await supabase.auth.getUser();
+    return user?.id || null;
   };
 
   return {
@@ -372,23 +372,26 @@ function supabaseAdapter() {
       return data;
     },
     async getProfile() {
-      const id = uid();
-      if (!id) return { data: null, error: { message: 'Sin sesión' } };
+      const id = await uid();
+      if (!id) return { data: null, error: { message: 'Sin sesiÃ³n' } };
       const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
       return { data, error };
     },
     async saveProfile(profile) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('profiles').upsert({ ...profile, id }, { onConflict: 'id' }).select().single();
       return { data, error };
     },
     async getHouses() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('houses').select('*').eq('user_id', id).order('created_at', { ascending: false });
       return { data, error };
     },
     async saveHouse(house) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('houses').upsert({ ...house, user_id: id }).select().single();
       return { data, error };
     },
@@ -397,12 +400,14 @@ function supabaseAdapter() {
       return { error };
     },
     async getEmployees() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('employees').select('*').eq('user_id', id).order('nombre', { ascending: true });
       return { data, error };
     },
     async saveEmployee(employee) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('employees').upsert({ ...employee, user_id: id }).select().single();
       return { data, error };
     },
@@ -411,12 +416,14 @@ function supabaseAdapter() {
       return { error };
     },
     async getAssignments() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('assignments').select('*').eq('user_id', id);
       return { data, error };
     },
     async saveAssignment(assignment) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('assignments').upsert({ ...assignment, user_id: id }).select().single();
       return { data, error };
     },
@@ -425,12 +432,14 @@ function supabaseAdapter() {
       return { error };
     },
     async getSalaryScales() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('salary_scales').select('*').eq('user_id', id).order('vigencia_desde', { ascending: false });
       return { data, error };
     },
     async saveSalaryScale(scale) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('salary_scales').upsert({ ...scale, user_id: id }).select().single();
       return { data, error };
     },
@@ -439,12 +448,14 @@ function supabaseAdapter() {
       return { error };
     },
     async getContributionRates() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('contribution_rates').select('*').eq('user_id', id).order('vigencia_desde', { ascending: false });
       return { data, error };
     },
     async saveContributionRate(rate) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('contribution_rates').upsert({ ...rate, user_id: id }).select().single();
       return { data, error };
     },
@@ -453,12 +464,14 @@ function supabaseAdapter() {
       return { error };
     },
     async getHolidays() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('holidays').select('*').eq('user_id', id).order('fecha', { ascending: true });
       return { data, error };
     },
     async saveHoliday(holiday) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('holidays').insert({ ...holiday, user_id: id }).select().single();
       return { data, error };
     },
@@ -467,12 +480,14 @@ function supabaseAdapter() {
       return { error };
     },
     async getSettlements() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('settlements').select('*').eq('user_id', id).order('periodo', { ascending: false });
       return { data, error };
     },
     async saveSettlement(settlement) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('settlements').upsert(settlement).select().single();
       return { data, error };
     },
@@ -493,12 +508,14 @@ function supabaseAdapter() {
       return { error };
     },
     async getLeaves() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('leaves').select('*').eq('user_id', id).order('desde', { ascending: true });
       return { data, error };
     },
     async saveLeave(leave) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('leaves').insert({ ...leave, user_id: id }).select().single();
       return { data, error };
     },
@@ -507,17 +524,20 @@ function supabaseAdapter() {
       return { error };
     },
     async getSettings() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('settings').select('*').eq('user_id', id).maybeSingle();
       return { data, error };
     },
     async saveSettings(settings) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const { data, error } = await supabase.from('settings').upsert({ ...settings, user_id: id }).select().single();
       return { data, error };
     },
     async exportData() {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       const tables = ['profiles','houses','employees','assignments','salary_scales','contribution_rates','holidays','settlements','settlement_lines','leaves','settings'];
       const out = {};
       for (const t of tables) {
@@ -527,7 +547,8 @@ function supabaseAdapter() {
       return { data: out, error: null };
     },
     async importData(json) {
-      const id = uid();
+      const id = await uid();
+       if (!id) return { data: null, error: { message: 'Sin sesión' } };
       try {
         const data = typeof json === 'string' ? JSON.parse(json) : json;
         const tables = Object.keys(data);
@@ -543,7 +564,7 @@ function supabaseAdapter() {
         }
         return { data: { ok: true }, error: null };
       } catch (e) {
-        return { data: null, error: { message: 'JSON inválido' } };
+        return { data: null, error: { message: 'JSON invÃ¡lido' } };
       }
     }
   };

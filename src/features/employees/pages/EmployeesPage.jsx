@@ -30,7 +30,7 @@ export default function EmployeesPage() {
         </div>
       )}
       <EmployeeList employees={employees} onSave={save} onRemove={remove} onView={(id) => { setViewId(id); setViewEmp(employees.find((e) => e.id === id)); }} />
-      <EmployeeDrawer employee={emp} onClose={() => { setViewId(null); setViewEmp(null); }} />
+      {emp && <EmployeeDrawer employee={emp} onClose={() => { setViewId(null); setViewEmp(null); }} />}
     </>
   );
 }

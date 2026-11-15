@@ -5,7 +5,7 @@ import { useRegister } from '../hooks.js';
 export default function RegisterForm({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { run, loading, error } = useRegister();
+  const { run, loading, error, needsConfirmation } = useRegister();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
@@ -20,6 +20,12 @@ export default function RegisterForm({ onLogin }) {
         <h2 className="card-title mb-3 text-center">Crear cuenta</h2>
         {error && (
           <div className="alert alert-danger mb-3" role="alert">{error}</div>
+        )}
+        {needsConfirmation && (
+          <div className="alert alert-info mb-3" role="alert">
+            ¡Cuenta creada! Te enviamos un email de confirmación a <strong>{email}</strong>.
+            Hacé clic en el enlace (revisá también la carpeta de spam) y después iniciá sesión.
+          </div>
         )}
         <form onSubmit={handleSubmit} noValidate>
           <div className="mb-3">
@@ -42,7 +48,7 @@ export default function RegisterForm({ onLogin }) {
         </form>
         <div className="text-center text-muted small">
           Ya ten&eacute;s cuenta?{' '}
-          <button type="button" className="btn btn-link text-primary p-0" onClick={onLogin}>
+          <button type="button" className="btn btn-link text-primary p-0" onClick={() => navigate("/login")}>
             Iniciar sesi&oacute;n
           </button>
         </div>
